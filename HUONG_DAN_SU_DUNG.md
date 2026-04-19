@@ -1,5 +1,7 @@
 # Hướng dẫn sử dụng MainPath Analysis Tool
 
+> **Thay thế MainPath 492** — cross-platform, mã nguồn mở, không cần license.
+
 ## Mục lục
 1. [Cài đặt](#1-cài-đặt)
 2. [Khởi động tool](#2-khởi-động-tool)
@@ -10,6 +12,7 @@
 7. [Đọc kết quả và giải thích weight](#7-đọc-kết-quả-và-giải-thích-weight)
 8. [Export kết quả](#8-export-kết-quả)
 9. [Câu hỏi thường gặp](#9-câu-hỏi-thường-gặp)
+10. [Phát triển và build release](#10-phát-triển-và-build-release)
 
 ---
 
@@ -315,3 +318,173 @@ A: Thường khác một vài nodes ở đầu/cuối. `global` cho kết quả 
 
 **Q: Tool có thể chạy offline không?**
 A: Có. Tool chạy hoàn toàn local trên máy tính của bạn, không cần internet sau khi cài đặt.
+
+---
+
+## 10. Phát triển và build release
+
+### Tổng quan kiến trúc source code
+
+```
+mainpath_tool/
+├── app.py                      # Streamlit UI chính
+├── parsers/
+│   ├── wos_parser.py           # Đọc file WOS .txt → DataFrame
+│   ├── citation_network.py     # Xây dựng DiGraph từ cited references
+│   └── relationship_parser.py  # Đọc file relationship ngoài
+├── algorithms/
+│   ├── traversal_weights.py    # Tính SPC / SPLC / SPNP
+│   ├── main_path.py            # MPA + KRMPA algorithms
+│   ├── coauthor.py             # Mạng cộng tác tác giả
+│   └── keyword.py              # Phân tích từ khóa
+├── output/
+│   ├── visualizer.py           # Biểu đồ plotly + pyvis
+│   └── excel_export.py         # Xuất file Excel
+├── .github/workflows/
+│   └── build.yml               # CI/CD tự động build macOS + Windows
+├── install_windows/
+│   ├── build_exe.bat           # Build thủ công trên Windows
+│   ├── install.bat             # Cài đặt môi trường Python
+│   └── uninstall.bat
+└── requirements.txt
+```
+
+---
+
+### Luồng CI/CD — GitHub Actions
+
+Toàn bộ quá trình build và phát hành được tự động hóa qua GitHub Actions:
+
+```
+Developer push code
+        │
+        ▼
+┌─────────────────────────────────┐
+│  github.com/tonydisco/          │
+│  MainPath-Analyzer              │
+│                                 │
+│  .github/workflows/build.yml   │
+└──────────┬──────────────────────┘
+           │
+     ┌─────┴──────┐
+     │            │
+     ▼            ▼
+┌─────────┐  ┌──────────┐
+│ macOS   │  │ Windows  │
+│ runner  │  │ runner   │
+│         │  │          │
+│PyInstall│  │PyInstall │
+│  er     │  │  er      │
+└────┬────┘  └─────┬────┘
+     │             │
+     ▼             ▼
+MainPath-     MainPath-
+macOS.zip    Windows.zip
+     │             │
+     └──────┬──────┘
+            │ (chỉ khi push tag v*)
+            ▼
+   GitHub Release tự động
+   với cả 2 file đính kèm
+```
+
+**Trigger conditions:**
+
+| Sự kiện | Build macOS | Build Windows | Tạo Release |
+|---------|:-----------:|:-------------:|:-----------:|
+| Push lên `main` | ✅ | ✅ | ❌ |
+| Push tag `v*` | ✅ | ✅ | ✅ |
+| Chạy tay (workflow_dispatch) | ✅ | ✅ | ❌ |
+
+---
+
+### Quy trình phát hành phiên bản mới
+
+#### Bước 1 — Cập nhật code và commit
+
+```bash
+# Chỉnh sửa code xong, stage và commit như bình thường
+git add <files>
+git commit -m "feat: mô tả thay đổi"
+git push
+```
+
+Lúc này GitHub Actions sẽ **tự động build** macOS + Windows (kết quả lưu trong tab Actions, có thể download thủ công để test).
+
+#### Bước 2 — Tạo release chính thức
+
+```bash
+# Đặt tag version theo semantic versioning: vMAJOR.MINOR.PATCH
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actions sẽ:
+1. Build `MainPath-macOS.zip` trên `macos-latest`
+2. Build `MainPath-Windows.zip` trên `windows-latest`
+3. Tự động tạo **GitHub Release** tại `github.com/tonydisco/MainPath-Analyzer/releases`
+4. Đính kèm cả 2 file zip vào release
+
+#### Bước 3 — Kiểm tra release
+
+Vào `github.com/tonydisco/MainPath-Analyzer/actions` để xem tiến trình build.
+Vào `github.com/tonydisco/MainPath-Analyzer/releases` để xem release đã tạo.
+
+---
+
+### Convention đặt tên version
+
+```
+v MAJOR . MINOR . PATCH
+  │        │       └── Bug fix, không thay đổi tính năng
+  │        └────────── Thêm tính năng mới, backward-compatible
+  └─────────────────── Breaking change hoặc redesign lớn
+```
+
+Ví dụ:
+- `v1.0.0` — phiên bản đầu tiên
+- `v1.1.0` — thêm tính năng mới (ví dụ: thêm tab mới)
+- `v1.1.1` — fix bug nhỏ
+- `v2.0.0` — thay đổi lớn về thuật toán hoặc UI
+
+---
+
+### Build thủ công (khi cần debug)
+
+**macOS:**
+```bash
+pip install pyinstaller
+cd mainpath_tool
+pyinstaller mainpath.spec --clean --noconfirm
+# Output: dist/MainPath/ → zip để phân phối
+```
+
+**Windows** (chạy trên máy Windows):
+```bat
+cd mainpath_tool\install_windows
+build_exe.bat
+# Output: dist\MainPath\MainPath.exe
+```
+
+> **Lưu ý:** PyInstaller không hỗ trợ cross-compile — macOS build phải chạy trên macOS, Windows build phải chạy trên Windows. Dùng GitHub Actions để build tự động cả hai nền tảng mà không cần có cả hai máy.
+
+---
+
+### Cấu trúc commit message
+
+Tool này dùng **Conventional Commits**:
+
+```
+<type>: <mô tả ngắn>
+
+[body tùy chọn]
+```
+
+| Type | Ý nghĩa |
+|------|---------|
+| `feat` | Thêm tính năng mới |
+| `fix` | Sửa bug |
+| `ci` | Thay đổi CI/CD pipeline |
+| `docs` | Cập nhật tài liệu |
+| `chore` | Công việc nền (config, deps) |
+| `refactor` | Tái cấu trúc code, không thêm tính năng |
