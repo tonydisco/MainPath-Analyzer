@@ -95,17 +95,26 @@ def _compute_spc(G, topo_order, decay_factor=0.2):
 
 
 def _compute_splc(G, topo_order, decay_factor=0.2):
-    """SPLC: fwd_count[u] × bwd_count[v] matching reference tool (Hummon & Doreian 1989)."""
-    sources = [n for n in G.nodes() if G.in_degree(n) == 0]
+    """
+    SPLC: Search Path Link Count — paths from any node to any sink through edge.
+    Formula: SPLC(u,v) = fwd_splc[u] × bwd_count[v]
+      fwd_splc[v] = 1 + Σ_{p predecessor} fwd_splc[p]
+                  = number of directed paths from ANY node (including v itself)
+                    to v, treating every node as a potential path start
+      bwd_count[v] = number of paths from v to any sink (source-sink backward count)
+    Each node can originate a search path (not only in-degree-0 sources), so
+    SPLC > SPC in general, matching MainPath 492 SPLC output.
+    Reference: Hummon & Doreian (1989), Liu & Lu (2012).
+    """
     sinks = [n for n in G.nodes() if G.out_degree(n) == 0]
 
-    fwd_count = {n: 0.0 for n in G.nodes()}
-    for s in sources:
-        fwd_count[s] = 1.0
+    # Forward: each node contributes +1 as its own path-start
+    fwd_splc = {n: 1.0 for n in G.nodes()}
     for node in topo_order:
         for succ in G.successors(node):
-            fwd_count[succ] += fwd_count[node]
+            fwd_splc[succ] += fwd_splc[node]
 
+    # Backward: classic source-sink path count from sinks
     bwd_count = {n: 0.0 for n in G.nodes()}
     for s in sinks:
         bwd_count[s] = 1.0
@@ -115,9 +124,9 @@ def _compute_splc(G, topo_order, decay_factor=0.2):
 
     weights = {}
     for u, v in G.edges():
-        weights[(u, v)] = fwd_count[u] * bwd_count[v]
+        weights[(u, v)] = fwd_splc[u] * bwd_count[v]
 
-    return weights, fwd_count, bwd_count
+    return weights, fwd_splc, bwd_count
 
 
 def _compute_spnp(G, topo_order, decay_factor=0.2):

@@ -594,6 +594,24 @@ with tab_export:
         if paths:
             export_sheets["Multiple Paths"] = multiple_paths_to_df(paths, df, G)
 
+        # KRMPA — đồng bộ với tab KRMPA (same parameters)
+        kr_paths_export = find_key_route_main_paths(
+            G,
+            n_significant_routes=n_significant_routes,
+            weight_attr="weight",
+            strategy=strategy_key,
+            tie_tolerance=float(tie_tolerance),
+        )
+        if kr_paths_export:
+            unique_kr = []
+            seen_kr = set()
+            for p in kr_paths_export:
+                k = tuple(p)
+                if k not in seen_kr:
+                    seen_kr.add(k)
+                    unique_kr.append(p)
+            export_sheets["KRMPA Paths"] = multiple_paths_to_df(unique_kr, df, G)
+
         if edge_df is not None and not edge_df.empty:
             export_sheets["Top Links"] = edge_df
 
