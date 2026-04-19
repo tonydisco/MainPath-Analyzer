@@ -1,0 +1,128 @@
+name: Build Releases
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build macOS bundle
+        run: |
+          pyinstaller mainpath.spec --clean --noconfirm
+
+      - name: Package as zip
+        run: |
+          cd dist
+          zip -r MainPath-macOS.zip MainPath/
+          mv MainPath-macOS.zip ../
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MainPath-macOS
+          path: MainPath-macOS.zip
+
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows EXE
+        run: |
+          pyinstaller mainpath.spec --clean --noconfirm
+
+      - name: Package as zip
+        run: |
+          cd dist
+          Compress-Archive -Path MainPath -DestinationPath ..\MainPath-Windows.zip
+        shell: powershell
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MainPath-Windows
+          path: MainPath-Windows.zip
+
+  release:
+    name: Create GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: MainPath-macOS
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: MainPath-Windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MainPath Analyzer ${{ github.ref_name }}
+          body: |
+            ## MainPath Analyzer — ${{ github.ref_name }}
+
+            Cross-platform reimplementation of **MainPath 492** as an open-source
+            Python/Streamlit tool for citation network analysis.
+
+            ### Features
+            - SPC / SPLC / SPNP traversal weight algorithms
+            - Main Path Analysis (MPA) — global DP and local search
+            - Key-Route MPA (KRMPA) — multiple branching paths
+            - Co-author and keyword network analysis
+            - Interactive visualizations (pyvis/plotly)
+            - Excel export matching MainPath 492 output format
+
+            ### Downloads
+            | Platform | File |
+            |----------|------|
+            | macOS | `MainPath-macOS.zip` |
+            | Windows | `MainPath-Windows.zip` |
+
+            ### Usage
+            1. Unzip the downloaded archive
+            2. Run `MainPath` (macOS) or `MainPath.exe` (Windows)
+            3. Upload your WOS `.txt` export files and click **Load Data**
+          files: |
+            MainPath-macOS.zip
+            MainPath-Windows.zip
+          draft: false
+          prerelease: false

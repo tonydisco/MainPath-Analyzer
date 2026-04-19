@@ -22,9 +22,10 @@ Thumbs.db
 data/
 *.txt.bak
 
-# PyInstaller output
+# PyInstaller build output (binaries không commit, dùng GitHub Releases)
 dist/
 build/
+*.zip
 
 # Streamlit cache
 .streamlit/
