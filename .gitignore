@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.spec
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data files (không commit data research)
+data/
+*.txt.bak
+
+# PyInstaller output
+dist/
+build/
+
+# Streamlit cache
+.streamlit/
