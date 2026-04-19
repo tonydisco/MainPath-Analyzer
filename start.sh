@@ -65,15 +65,38 @@ echo -e "${BOLD}============================================${RESET}"
 
 # -------- 1. Check Python --------
 step "1/5 Checking Python"
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON=python3
-elif command -v python >/dev/null 2>&1; then
-    PYTHON=python
-else
-    fail "Python 3 không được tìm thấy. Cài đặt tại https://www.python.org/downloads/"
+MIN_MAJOR=3
+MIN_MINOR=8
+PYTHON=""
+
+# Try python3.X first (most specific), then python3, then python
+for candidate in python3.12 python3.11 python3.10 python3.9 python3.8 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        VER=$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "0.0")
+        MAJOR="${VER%.*}"
+        MINOR="${VER#*.}"
+        if [[ "$MAJOR" -eq "$MIN_MAJOR" ]] && [[ "$MINOR" -ge "$MIN_MINOR" ]]; then
+            PYTHON="$candidate"
+            PY_VER="$VER"
+            break
+        fi
+    fi
+done
+
+if [[ -z "$PYTHON" ]]; then
+    # Report what we found to help user diagnose
+    if command -v python >/dev/null 2>&1; then
+        FOUND_VER=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "unknown")
+        warn "Tìm thấy 'python' version $FOUND_VER nhưng cần Python ≥ ${MIN_MAJOR}.${MIN_MINOR}"
+    fi
+    echo ""
+    echo "  Cách khắc phục:"
+    echo "    • macOS:   brew install python@3.11"
+    echo "    • Ubuntu:  sudo apt install python3.11 python3.11-venv"
+    echo "    • Hoặc tải từ https://www.python.org/downloads/"
+    fail "Không tìm thấy Python ≥ ${MIN_MAJOR}.${MIN_MINOR}"
 fi
 
-PY_VER=$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 ok "Python $PY_VER ($(which "$PYTHON"))"
 
 # -------- 2. Git pull --------
